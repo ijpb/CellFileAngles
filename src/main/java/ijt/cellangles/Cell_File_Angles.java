@@ -13,6 +13,7 @@ import java.util.List;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.WindowManager;
+import ij.gui.GenericDialog;
 import ij.gui.Line;
 import ij.gui.OvalRoi;
 import ij.gui.Overlay;
@@ -30,6 +31,12 @@ import inra.ijpb.measure.GeometricMeasures2D;
  */
 public class Cell_File_Angles implements PlugIn
 {
+	enum RootSides 
+	{
+		LEFT, 
+		RIGHT
+	};
+	
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -38,9 +45,6 @@ public class Cell_File_Angles implements PlugIn
 	@Override
 	public void run(String arg0) 
 	{
-//		System.out.println("Hello...");
-//		IJ.showMessage("Hello!");
-		
 		// Get current open image
 		ImagePlus imagePlus = WindowManager.getCurrentImage();
 		if (imagePlus == null) 
@@ -48,6 +52,17 @@ public class Cell_File_Angles implements PlugIn
 			IJ.error("No image", "Need at least one image to work");
 			return;
 		}
+
+		// create the list of image names
+		int[] indices = WindowManager.getIDList();
+		String[] imageNames = new String[indices.length];
+		for (int i=0; i<indices.length; i++)
+		{
+			imageNames[i] = WindowManager.getImage(indices[i]).getTitle();
+		}
+		
+		// name of selected image
+		String selectedImageName = IJ.getImage().getTitle();
 
 		// extract current ROI, and check it has a valid type
 		Roi roi = imagePlus.getRoi();
@@ -63,64 +78,49 @@ public class Cell_File_Angles implements PlugIn
 		}
 		 
 
-//		// create the dialog
-//		GenericDialog gd = new GenericDialog("Grayscale Granulometry");
-//		
-//		gd.addChoice("Operation", Operation.getAllLabels(), 
-//				Operation.CLOSING.toString());
-//		gd.addChoice("Element", Strel.Shape.getAllLabels(), 
-//				Strel.Shape.SQUARE.toString());
-//		gd.addNumericField("Radius Max. (in pixels)", 25, 0);
-//		gd.addNumericField("Step (in pixels)", 1, 0);
-//		// add psb to specify spatial calibration
-//		Calibration calib = image.getCalibration();
-//		gd.addNumericField("Spatial_Calibration", calib.pixelWidth, 3);
-//		gd.addStringField("Calibration_Unit", calib.getUnit());
-//		gd.addCheckbox("Display Volume Curve", false);
-//
-//		// Display dialog and wait for user input
-//		gd.showDialog();
-//		if (gd.wasCanceled())
-//		{
-//			return;
-//		}
+		// create the dialog
+		GenericDialog gd = new GenericDialog("Cell File Analyzer");
+		gd.addChoice("Root Side", new String[] { "Left Side", "Right Side" }, "Left Side");
+		gd.addCheckbox("Show Overlay Result", true);
+		gd.addChoice("Image to overlay:", imageNames, selectedImageName);
 		
-//		// extract chosen parameters
-//		Operation op 		= Operation.fromLabel(gd.getNextChoice());
-//		Strel.Shape shape 	= Strel.Shape.fromLabel(gd.getNextChoice());
-//		int radiusMax 		= (int) gd.getNextNumber();		
-//		int step 			= (int) gd.getNextNumber();		
-//		double resol 		= gd.getNextNumber();
-//		String unitName 	= gd.getNextString();
-//		boolean displayVolumeCurve = gd.getNextBoolean();
-
-		boolean isLeftSide = true;
+		// Display dialog and wait for user input
+		gd.showDialog();
+		if (gd.wasCanceled())
+		{
+			return;
+		}
 		
+		boolean isLeftSide = gd.getNextChoiceIndex() == 0;
+		@SuppressWarnings("unused")
+		boolean showOverlay = gd.getNextBoolean();
+		int overlayImageIndex = gd.getNextChoiceIndex();
 		
+		// find image for displaying geometric overlays
+		ImagePlus imageToOverlay = WindowManager.getImage(overlayImageIndex + 1);
+		
+		// Extract the necessary data
 		ImageProcessor image = imagePlus.getProcessor();
 		Polygon polyline = ((PolygonRoi) roi).getPolygon();
-//		IJ.log("Polyline contains " + polyline.npoints + " points");
-//		for (int i = 0; i < polyline.npoints; i++)
-//		{
-//			
-//			IJ.log("x=" + polyline.xpoints[i] + ", y=" + polyline.ypoints[i]);
-//		}
+		
+		ResultsTable table = computeCellFileAngles(image, polyline, isLeftSide, imageToOverlay);
+		table.show("Cell File Angles");
+	}
 
-		List<Integer> labelList = findLabelsAlongRoi(image, polyline);
+	public ResultsTable computeCellFileAngles(ImageProcessor labelImage, Polygon polyline, boolean isLeftSide, ImagePlus imageToOverlay)
+	{
+		List<Integer> labelList = findLabelsAlongRoi(labelImage, polyline);
 		int nLabels = labelList.size();
 		
-		Overlay overlay = imagePlus.getOverlay();
+		Overlay overlay = imageToOverlay.getOverlay();
 		if (overlay == null)
 		{
 			overlay = new Overlay();
 		}
 		
 		// Create a ROI for the cell file path
-		FloatPolygon cellFilePath = getCellFilePath(image, labelList);
-		PolygonRoi pathRoi = new PolygonRoi(cellFilePath, Roi.POLYLINE);
-		pathRoi.setStrokeColor(Color.RED);
-		pathRoi.setStrokeWidth(2);
-		overlay.add(pathRoi);
+		FloatPolygon cellFilePath = getCellFilePath(labelImage, labelList);
+		addCellFilePathOverlay(overlay, cellFilePath);
 		
 		ResultsTable table = new ResultsTable();
 		
@@ -136,15 +136,15 @@ public class Cell_File_Angles implements PlugIn
 			table.addValue("Label2", label2);
 			
 			// find points located between the two labels
-			List<Point> boundaryPoints = findBoundaryPixels(image, label1, label2);
+			List<Point> boundaryPoints = findBoundaryPixels(labelImage, label1, label2);
 			
 			// isolate boundary extremities
 			List<Point> extremities = findBoundaryExtremities(boundaryPoints);
 			allExtremities.addAll(extremities);
 			
 			// filter extremities to isolate inner and outer points
-			Point2D.Double centroid1 = new Point2D.Double(cellFilePath.xpoints[i], cellFilePath.ypoints[i]);
-			Point2D.Double centroid2 = new Point2D.Double(cellFilePath.xpoints[i+1], cellFilePath.ypoints[i+1]);
+			Point2D centroid1 = getVertex(cellFilePath, i); 
+			Point2D centroid2 = getVertex(cellFilePath, i + 1);
 			PointPair pair = getInnerAndOuterPoints(extremities, centroid1, centroid2, isLeftSide); 
 			
 			// add current line segment to overlay
@@ -179,14 +179,21 @@ public class Cell_File_Angles implements PlugIn
 		
 		addExtremitiesOverlay(overlay, allExtremities);
 		
-		imagePlus.setOverlay(overlay);
+		imageToOverlay.setOverlay(overlay);
 		
-		table.show("Cell File Angles");
+		return table;
 	}
-
 	
 	// ====================================================
 	// Graphical functions 
+	
+	private void addCellFilePathOverlay(Overlay overlay, FloatPolygon cellFilePath)
+	{
+		PolygonRoi pathRoi = new PolygonRoi(cellFilePath, Roi.POLYLINE);
+		pathRoi.setStrokeColor(Color.RED);
+		pathRoi.setStrokeWidth(1);
+		overlay.add(pathRoi);
+	}
 	
 	/**
 	 * Add each boundary extremity as a red circle ROI.
@@ -204,7 +211,7 @@ public class Cell_File_Angles implements PlugIn
 			
 			// draw inscribed circle
 			int width = 2 * r + 1;
-			Roi roi = new OvalRoi((int) (x - r), (int) (y - r), width, width);
+			Roi roi = new OvalRoi((int) (x - r - 1), (int) (y - r - 1), width, width);
 			roi.setStrokeColor(Color.RED);
 			roi.setFillColor(Color.RED);
 			overlay.add(roi);
@@ -218,16 +225,15 @@ public class Cell_File_Angles implements PlugIn
 				outerPoint.getX(), outerPoint.getY());
 		
 		lineRoi.setStrokeColor(Color.GREEN);
-		lineRoi.setStrokeWidth(2);
+		lineRoi.setStrokeWidth(1);
 		
 		overlay.add(lineRoi);
-		
 	}
 	
 	// ====================================================
 	// Computing functions 
 	
-	public final static List<Integer> findLabelsAlongRoi(ImageProcessor image, Polygon poly)
+	public static final List<Integer> findLabelsAlongRoi(ImageProcessor image, Polygon poly)
 	{
 		if (poly.npoints == 0)
 		{
@@ -516,31 +522,32 @@ public class Cell_File_Angles implements PlugIn
 	}
 	
 	/**
-	 * Computes the angle with the horizontal of the line passing through the
-	 * input points.
+	 * Computes the angle with the horizontal of the straight line passing
+	 * through the input points.
 	 * 
 	 * @param p1
 	 *            the origin of the line
 	 * @param p2
-	 *            another point of the line defining line direction
+	 *            another point on the line defining the line direction
 	 * @return the angle of the line with the horizontal direction, in radians
 	 */
-	private double lineAngle(Point2D p1, Point2D p2)
+	private static final double lineAngle(Point2D p1, Point2D p2)
 	{
 		double dx = p2.getX() - p1.getX();
 		double dy = p2.getY() - p1.getY();
 		return (Math.atan2(dy, dx) + 2 * Math.PI) % (2 * Math.PI);
 	}
 	
-	private double betweenLinesAngle(double angle1, double angle2)
+	private static final double betweenLinesAngle(double angle1, double angle2)
 	{
 		return (angle2 - angle1 + 2 * Math.PI) % (2 * Math.PI);
 	}
 	
-//	public static final double computeBoundaryAngle()
-//	{
-//		return 0;
-//	}
+	private static final Point2D getVertex(FloatPolygon poly, int index)
+	{
+		 return new Point2D.Double(poly.xpoints[index], poly.ypoints[index]);
+	}
+
 	
 	/**
 	 * A class containing two points, used for storing inner and outer points of the boundary.
