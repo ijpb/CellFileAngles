@@ -81,6 +81,7 @@ public class Cell_File_Angles implements PlugIn
 		// create the dialog
 		GenericDialog gd = new GenericDialog("Cell File Analyzer");
 		gd.addChoice("Root Side", new String[] { "Left Side", "Right Side" }, "Left Side");
+		gd.addCheckbox("Smooth Cell File Path", true);
 		gd.addCheckbox("Show Overlay Result", true);
 		gd.addChoice("Image to overlay:", imageNames, selectedImageName);
 		
@@ -92,6 +93,7 @@ public class Cell_File_Angles implements PlugIn
 		}
 		
 		boolean isLeftSide = gd.getNextChoiceIndex() == 0;
+		boolean smoothCellFilePath = gd.getNextBoolean();
 		@SuppressWarnings("unused")
 		boolean showOverlay = gd.getNextBoolean();
 		int overlayImageIndex = gd.getNextChoiceIndex();
@@ -103,11 +105,12 @@ public class Cell_File_Angles implements PlugIn
 		ImageProcessor image = imagePlus.getProcessor();
 		Polygon polyline = ((PolygonRoi) roi).getPolygon();
 		
-		ResultsTable table = computeCellFileAngles(image, polyline, isLeftSide, imageToOverlay);
+		ResultsTable table = computeCellFileAngles(image, polyline, smoothCellFilePath, isLeftSide, imageToOverlay);
 		table.show("Cell File Angles");
 	}
 
-	public ResultsTable computeCellFileAngles(ImageProcessor labelImage, Polygon polyline, boolean isLeftSide, ImagePlus imageToOverlay)
+	public ResultsTable computeCellFileAngles(ImageProcessor labelImage, Polygon polyline, 
+			boolean smoothPath, boolean isLeftSide, ImagePlus imageToOverlay)
 	{
 		List<Integer> labelList = findLabelsAlongRoi(labelImage, polyline);
 		int nLabels = labelList.size();
@@ -120,6 +123,10 @@ public class Cell_File_Angles implements PlugIn
 		
 		// Create a ROI for the cell file path
 		FloatPolygon cellFilePath = getCellFilePath(labelImage, labelList);
+		if (smoothPath)
+		{
+			cellFilePath = smoothPolyline(cellFilePath);
+		}
 		addCellFilePathOverlay(overlay, cellFilePath);
 		
 		ResultsTable table = new ResultsTable();
@@ -210,8 +217,8 @@ public class Cell_File_Angles implements PlugIn
 			int r = 1;
 			
 			// draw inscribed circle
-			int width = 2 * r + 1;
-			Roi roi = new OvalRoi((int) (x - r - 1), (int) (y - r - 1), width, width);
+			int width = 2 * r;
+			Roi roi = new OvalRoi((int) (x - r), (int) (y - r), width, width);
 			roi.setStrokeColor(Color.RED);
 			roi.setFillColor(Color.RED);
 			overlay.add(roi);
@@ -343,6 +350,32 @@ public class Cell_File_Angles implements PlugIn
 		}
 
 		return new FloatPolygon(xCoords, yCoords, nLabels);
+	}
+	
+	public static final FloatPolygon smoothPolyline(FloatPolygon poly)
+	{
+		// create resulting polyline
+		FloatPolygon smoothed = poly.duplicate();
+		
+		// iterate over inner vertices
+		for (int i = 1; i < poly.npoints - 1; i++)
+		{
+			float x = 0;
+			float y = 0;
+			// iterate over neighbors
+			for (int j = i - 1; j <= i + 1; j++)
+			{
+				x += poly.xpoints[j];
+				y += poly.ypoints[j];
+			}
+			
+			// compute average
+			smoothed.xpoints[i] = (float) (x / 3.0);
+			smoothed.ypoints[i] = (float) (y / 3.0);
+		}
+		
+		// return smoothed polyline
+		return smoothed;
 	}
 	
 	public static final List<Point> findBoundaryPixels(ImageProcessor labelImage, int label1, int label2)
