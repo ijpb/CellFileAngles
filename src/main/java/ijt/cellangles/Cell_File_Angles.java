@@ -157,6 +157,16 @@ public class Cell_File_Angles implements PlugIn
 			// add current line segment to overlay
 			Point innerPoint = pair.p1;
 			Point outerPoint = pair.p2;
+			if (innerPoint == null)
+			{
+				IJ.error("Inner point is null, i=" + i);
+				break;
+			}
+			if (outerPoint == null)
+			{
+				IJ.error("Outer point is null, i=" + i);
+				break;
+			}
 			addBoundaryEdgeOverlay(overlay, innerPoint, outerPoint);
 
 			table.addValue("innerX", innerPoint.getX());
@@ -282,21 +292,32 @@ public class Cell_File_Angles implements PlugIn
 		int x2 = p2.x;
 		int y2 = p2.y;
 
+		// get direction vector 
 		int dx = x2 - x1;
 		int dy = y2 - y1;
+		
+		// get absolute values of direction vector components
+		int adx = Math.abs(dx);
+		int ady = Math.abs(dy);
 
 		// create output list
-		int nPoints = Math.max(Math.abs(dx),  Math.abs(dy)) + 1;
+		int nPoints = Math.max(adx, ady) + 1;
 		List<Point> points = new ArrayList<Point>(nPoints);
 
 		// init with first point
 		points.add(new Point(x1, y1));
 
-		// sample points in the main direction of the line segment 
-		if (dx >= dy)
+		// small check to avoid problems in case of multiple vertex 
+		if (dx == 0 && dy == 0)
 		{
-			// compute line slope
-			int incX = dx / Math.abs(dx);
+			return points;
+		}
+		
+		// sample points in the main direction of the line segment 
+		if (adx >= ady)
+		{
+			// compute line slope for horizontal lines
+			int incX = dx / adx;
 			double m = ((double) dy) / ((double) dx);
 
 			// iterate over x, and compute corresponding y
@@ -311,8 +332,8 @@ public class Cell_File_Angles implements PlugIn
 		}	    
 		else
 		{
-			// compute line slope
-			int incY = dy / Math.abs(dy);
+			// compute line slope for vertical lines
+			int incY = dy / ady;
 			double m = ((double) dx) / ((double) dy);
 
 			// iterate over y, and compute corresponding x
@@ -417,7 +438,7 @@ public class Cell_File_Angles implements PlugIn
 					}
 				}
 				
-				// check if neihgborhood contains each label
+				// check if neighborhood contains each label
 				if (neighborList.contains(label1) && neighborList.contains(label2))
 				{
 					pixelList.add(new Point(x, y));
