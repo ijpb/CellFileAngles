@@ -13,7 +13,7 @@ http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
 	<groupId>sc.fiji</groupId>
 	<artifactId>Cell_File_Angles</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.2-SNAPSHOT</version>
 
 	<name>plugins/Cell_File_Angles.jar</name>
 	<description>Quantification of cell wall angles between cells</description>
