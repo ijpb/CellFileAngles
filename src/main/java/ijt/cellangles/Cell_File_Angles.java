@@ -23,7 +23,7 @@ import ij.measure.ResultsTable;
 import ij.plugin.PlugIn;
 import ij.process.FloatPolygon;
 import ij.process.ImageProcessor;
-import inra.ijpb.measure.GeometricMeasures2D;
+import inra.ijpb.measure.region2d.Centroid;
 
 /**
  * @author dlegland
@@ -359,7 +359,7 @@ public class Cell_File_Angles implements PlugIn
 		{
 			labels[i] = labelList.get(i);
 		}
-		double[][] centroids = GeometricMeasures2D.centroids(labelImage, labels);
+		double[][] centroids = Centroid.centroids(labelImage, labels);
 		
 		// Convert to two arrays of int for each direction
 		float[] xCoords = new float[nLabels];
