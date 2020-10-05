@@ -37,6 +37,8 @@ public class Cell_File_Angles implements PlugIn
 		RIGHT
 	};
 	
+	String[] tissueNames = new String[] {"Epiderm", "Cortex", "Endoderm", "Pericycle"};
+	
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -68,18 +70,20 @@ public class Cell_File_Angles implements PlugIn
 		Roi roi = imagePlus.getRoi();
 		if (roi == null)
 		{
-			IJ.error("No ROI", "Requires a LineRoi to work");
+			IJ.error("No ROI", "Requires a Polyline Roi to work");
 			return;			
 		}
 		if (roi.getType() != Roi.POLYLINE)
 		{
-			IJ.error("No ROI", "Requires a PolylineRoi to work");
+			IJ.error("No ROI", "Requires a Polyline Roi to work");
 			return;			
 		}
 		 
 
 		// create the dialog
 		GenericDialog gd = new GenericDialog("Cell File Analyzer");
+		gd.addChoice("Tissue Type", tissueNames, tissueNames[0]);
+		gd.addStringField("Other Type", "");
 		gd.addChoice("Root Side", new String[] { "Left Side", "Right Side" }, "Left Side");
 		gd.addCheckbox("Smooth Cell File Path", true);
 		gd.addCheckbox("Show Overlay Result", true);
@@ -92,6 +96,18 @@ public class Cell_File_Angles implements PlugIn
 			return;
 		}
 		
+		int tissueTypeIndex = gd.getNextChoiceIndex();
+		String tissueTypeName;
+		String otherType = gd.getNextString();
+		if (otherType.isEmpty())
+		{
+			tissueTypeName = tissueNames[tissueTypeIndex];
+		}
+		else
+		{
+			tissueTypeName = otherType;
+			tissueTypeIndex = -1;
+		}
 		boolean isLeftSide = gd.getNextChoiceIndex() == 0;
 		boolean smoothCellFilePath = gd.getNextBoolean();
 		@SuppressWarnings("unused")
@@ -101,17 +117,17 @@ public class Cell_File_Angles implements PlugIn
 		// find image for displaying geometric overlays
 		ImagePlus imageToOverlay = WindowManager.getImage(overlayImageIndex + 1);
 		
-		// Extract the necessary data
-		ImageProcessor image = imagePlus.getProcessor();
-		Polygon polyline = ((PolygonRoi) roi).getPolygon();
-		
-		ResultsTable table = computeCellFileAngles(image, polyline, smoothCellFilePath, isLeftSide, imageToOverlay);
+		ResultsTable table = computeCellFileAngles(imagePlus, tissueTypeName, smoothCellFilePath, isLeftSide, imageToOverlay);
 		table.show("Cell File Angles");
 	}
 
-	public ResultsTable computeCellFileAngles(ImageProcessor labelImage, Polygon polyline, 
+	public ResultsTable computeCellFileAngles(ImagePlus labelImagePlus, String tissueTypeName, 
 			boolean smoothPath, boolean isLeftSide, ImagePlus imageToOverlay)
 	{
+		ImageProcessor labelImage = labelImagePlus.getProcessor();
+		Roi roi = labelImagePlus.getRoi();
+		Polygon polyline = ((PolygonRoi) roi).getPolygon();
+
 		List<Integer> labelList = findLabelsAlongRoi(labelImage, polyline);
 		int nLabels = labelList.size();
 		
@@ -192,10 +208,15 @@ public class Cell_File_Angles implements PlugIn
 			}
 			
 			table.addValue("angle", Math.toDegrees(angle));
+			
+			// Write current results into the "log" window
+			String imageName = labelImagePlus.getShortTitle();
+			String str = imageName + "; " + tissueTypeName + "; " + label1 + "; " + label2 + "; " + innerPoint.getX() + "; " + innerPoint.getY() + "; " + outerPoint.getX() + "; " + outerPoint.getY() + "; " + Math.toDegrees(angle); 
+			IJ.log(str);
 		}
 		
+		// update display of overlay
 		addExtremitiesOverlay(overlay, allExtremities);
-		
 		imageToOverlay.setOverlay(overlay);
 		
 		return table;
@@ -270,7 +291,7 @@ public class Cell_File_Angles implements PlugIn
 			point = new Point(poly.xpoints[i], poly.ypoints[i]);
 			
 			// get integer-coord positions along edge
-			List<Point> intPoints = getIntegerPoint(prev, point);
+			List<Point> intPoints = createDiscreteLine(prev, point);
 			
 			for (Point p : intPoints)
 			{
@@ -285,7 +306,7 @@ public class Cell_File_Angles implements PlugIn
 		return labels;
 	}
 	
-	private static final List<Point> getIntegerPoint(Point p1, Point p2)
+	private static final List<Point> createDiscreteLine(Point p1, Point p2)
 	{
 		int x1 = p1.x;
 		int y1 = p1.y;
