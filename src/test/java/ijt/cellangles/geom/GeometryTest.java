@@ -1,13 +1,15 @@
 /**
  * 
  */
-package ijt.cellangles;
+package ijt.cellangles.geom;
 
 import static org.junit.Assert.*;
 
 import java.awt.Point;
 
 import org.junit.Test;
+
+import ijt.geom.Geometry;
 
 /**
  * @author dlegland

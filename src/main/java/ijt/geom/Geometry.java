@@ -1,7 +1,7 @@
 /**
  * 
  */
-package ijt.cellangles;
+package ijt.geom;
 
 import java.awt.Point;
 import java.awt.geom.Point2D;
