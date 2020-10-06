@@ -144,19 +144,7 @@ public class Cell_File_Angles implements PlugIn
 		cellFile.computeCellsBoundaries(labelImage);
 		
 		// Concatenates some values into ResultsTable
-		ResultsTable table = new ResultsTable();
-		for (CellsBoundary boundary : cellFile.getBoundaries())
-		{
-			table.incrementCounter();
-			table.addValue("Label1", boundary.label1);
-			table.addValue("Label2", boundary.label2);
-
-			table.addValue("innerX", boundary.innerPoint.getX());
-			table.addValue("innerY", boundary.innerPoint.getY());
-			table.addValue("outerX", boundary.outerPoint.getX());
-			table.addValue("outerY", boundary.outerPoint.getY());
-			table.addValue("angle", Math.toDegrees(boundary.angle));
-		}
+		ResultsTable table = cellFile.createTable();
 		
 		// Write current results into the "log" window
 		String imageName = labelImagePlus.getShortTitle();
@@ -177,12 +165,7 @@ public class Cell_File_Angles implements PlugIn
 		{
 			overlay = new Overlay();
 		}
-		for (CellsBoundary bnd : cellFile.getBoundaries())
-		{
-			addBoundaryEdgeOverlay(overlay, bnd.innerPoint, bnd.outerPoint);
-		}
-		addCellFilePathOverlay(overlay, cellFile.pathCurve);
-		addExtremitiesOverlay(overlay, cellFile.getAllExtremities());
+		updateOverlay(overlay, cellFile);
 		imageToOverlay.setOverlay(overlay);
 		
 		return table;
@@ -191,6 +174,16 @@ public class Cell_File_Angles implements PlugIn
 	
 	// ====================================================
 	// Graphical functions 
+	
+	public void updateOverlay(Overlay overlay, CellFile cellFile)
+	{
+		for (CellsBoundary bnd : cellFile.getBoundaries())
+		{
+			addBoundaryEdgeOverlay(overlay, bnd.innerPoint, bnd.outerPoint);
+		}
+		addCellFilePathOverlay(overlay, cellFile.pathCurve);
+		addExtremitiesOverlay(overlay, cellFile.getAllExtremities());
+	}
 	
 	private void addCellFilePathOverlay(Overlay overlay, Polyline2D poly)
 	{

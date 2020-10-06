@@ -11,6 +11,7 @@ import java.util.Collection;
 import java.util.List;
 
 import ij.IJ;
+import ij.measure.ResultsTable;
 import ij.process.ImageProcessor;
 import ijt.geom.Geometry;
 import ijt.geom.Polyline2D;
@@ -24,15 +25,17 @@ import inra.ijpb.measure.region2d.Centroid;
  */
 public class CellFile
 {
+	// ====================================================
+	// Class members
+
 	List<Point2D> wayPoints = new ArrayList<Point2D>();
 
 	List<Integer> labelList = new ArrayList<Integer>();
-	
+
 	Polyline2D pathCurve = new Polyline2D();
-	
+
 	ArrayList<CellsBoundary> boundaries = new ArrayList<CellsBoundary>();
-	
-	
+
 	// Meta-data on the cell file
 	
 	String tissueTypeName;
@@ -40,10 +43,42 @@ public class CellFile
 	boolean isLeftSide = true;
 	
 	
+	// ====================================================
+	// Constructor
+
 	public CellFile(String tissueType, boolean isLeft)
 	{
 		this.tissueTypeName = tissueType;
 		this.isLeftSide = isLeft;
+	}
+	
+	
+	// ====================================================
+	// Access methods
+
+	/**
+	 * Creates a Results table containing most of numerical results.
+	 * 
+	 * @return a ResultsTable with most numerical results.
+	 */
+	public ResultsTable createTable()
+	{
+		// Concatenates some values into ResultsTable
+		ResultsTable table = new ResultsTable();
+		for (CellsBoundary boundary : this.boundaries)
+		{
+			table.incrementCounter();
+			table.addValue("Label1", boundary.label1);
+			table.addValue("Label2", boundary.label2);
+
+			table.addValue("innerX", boundary.innerPoint.getX());
+			table.addValue("innerY", boundary.innerPoint.getY());
+			table.addValue("outerX", boundary.outerPoint.getX());
+			table.addValue("outerY", boundary.outerPoint.getY());
+			table.addValue("angle", Math.toDegrees(boundary.angle));
+		}
+
+		return table;
 	}
 	
 	public Collection<CellsBoundary> getBoundaries()
@@ -63,6 +98,9 @@ public class CellFile
 	}
 	
 	
+	// ====================================================
+	// Setup inputs
+
 	public void setWayPoints(Polygon poly)
 	{
 		this.wayPoints.clear();
@@ -78,6 +116,10 @@ public class CellFile
 		this.wayPoints.addAll(points);
 	}
 	
+
+	// ====================================================
+	// Computation methods
+
 	/**
 	 * Computes the list of labels along the cell file, when traveling along the
 	 * way points within the label image.
