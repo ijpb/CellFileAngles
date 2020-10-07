@@ -41,26 +41,30 @@ import ijt.geom.Polyline2D;
  * @author dlegland
  *
  */
-public class Cell_File_Angles extends PlugInFrame implements ActionListener
+public class Cell_File_Angles extends PlugInFrame
 {	
 	/**
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
 
+	String[] tissueNames = new String[] {"Epiderm", "Cortex", "Endoderm", "Pericycle"};
+	
 	enum RootSides 
 	{
 		LEFT, 
 		RIGHT
 	};
 	
-	String[] tissueNames = new String[] {"Epiderm", "Cortex", "Endoderm", "Pericycle"};
-	
-	
+	// processing options
+	JComboBox<String> tissueTypeCombo;
 	JTextField tissueTypeTextField;
 	JCheckBox leftSideCheckBox;
 	JCheckBox smoothPolylineCheckBox;
 
+	// result display management
+	JCheckBox showTableCheckBox;
+	JCheckBox showLogCheckBox;
 	JCheckBox showOverlayCheckBox;
 	JLabel imageToOverlayLabel;
 	JComboBox<String> imageToOverlayCombo;
@@ -75,7 +79,6 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 		setupLayout();
 		
 		this.pack();
-//		this.setSize(300, 200);
 		
 		GUI.center(this);
 		setVisible(true);
@@ -84,16 +87,20 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 	
 	private void setupWidgets()
 	{
+		this.tissueTypeCombo = new JComboBox<String>();
+		for (String tissueType : tissueNames)
+		{
+			this.tissueTypeCombo.addItem(tissueType);
+		}
 		this.tissueTypeTextField = new JTextField(15);
 
 		this.leftSideCheckBox = new JCheckBox("Left Side of Root", true);
-		this.leftSideCheckBox.setAlignmentX(LEFT_ALIGNMENT);
 
-		this.smoothPolylineCheckBox = new JCheckBox("Smooth Polyline");
-		this.smoothPolylineCheckBox.setAlignmentX(LEFT_ALIGNMENT);
+		this.smoothPolylineCheckBox = new JCheckBox("Smooth Polyline", true);
 		
-		this.showOverlayCheckBox = new JCheckBox("Show Result Overlay");
-		this.showOverlayCheckBox.setAlignmentX(0.0f);
+		this.showTableCheckBox = new JCheckBox("Show Results in Table", true);
+		this.showLogCheckBox = new JCheckBox("Show Result in Log", true);
+		this.showOverlayCheckBox = new JCheckBox("Overlay Results on Image", true);
 		this.showOverlayCheckBox.addActionListener(new ActionListener() 
 		{
 			@Override
@@ -125,13 +132,16 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.PAGE_AXIS));
 		
 		JPanel metaDataPanel = createOptionsPanel("Meta-Data");
-		addInLine(metaDataPanel, new JLabel("Tissue Type: "), this.tissueTypeTextField);
+		addInLine(metaDataPanel, new JLabel("Tissue Type: "), this.tissueTypeCombo);
+		addInLine(metaDataPanel, new JLabel("Other Tissue Type: "), this.tissueTypeTextField);
 		addInLine(metaDataPanel, this.leftSideCheckBox);
 		
 		JPanel processingPanel = createOptionsPanel("Processing Options");
 		addInLine(processingPanel, this.smoothPolylineCheckBox);
 
 		JPanel displayOptionsPanel = createOptionsPanel("Display Options");
+		addInLine(displayOptionsPanel, this.showTableCheckBox);
+		addInLine(displayOptionsPanel, this.showLogCheckBox);
 		addInLine(displayOptionsPanel, this.showOverlayCheckBox);
 		addInLine(displayOptionsPanel, this.imageToOverlayLabel, this.imageToOverlayCombo);
 		
@@ -170,22 +180,23 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 		panel.add(rowPanel);
 	}
 	
-	public void actionPerformed(ActionEvent evt)
-	{
-	}
 	
 	public void runAnalysis()
 	{
+		// retrieve data necessary for computation
+
 		// Get current open image
-		ImagePlus imagePlus = WindowManager.getCurrentImage();
-		if (imagePlus == null) 
+		ImagePlus labelImagePlus = WindowManager.getCurrentImage();
+		if (labelImagePlus == null) 
 		{
 			IJ.error("No image", "Need at least one image to work");
 			return;
 		}
+		ImageProcessor labelImage = labelImagePlus.getProcessor();
+		
 		
 		// extract current ROI, and check it has a valid type
-		Roi roi = imagePlus.getRoi();
+		Roi roi = labelImagePlus.getRoi();
 		if (roi == null)
 		{
 			IJ.error("No ROI", "Requires a Polyline Roi to work");
@@ -197,18 +208,71 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 			return;			
 		}
 		
-		// Extract Computation options
+		
+		// Meta-data associated to analysis 
 		String tissueTypeName = this.tissueTypeTextField.getText();
+		if (tissueTypeName.isEmpty())
+		{
+			tissueTypeName = (String) this.tissueTypeCombo.getSelectedItem();
+		}
 		boolean isLeftSide = this.leftSideCheckBox.isSelected();
+		
+		// Extract Computation options
 		boolean smoothPolyline = this.smoothPolylineCheckBox.isSelected();
 		
 		
-		// find image for displaying geometric overlays
-		int overlayImageIndex = this.imageToOverlayCombo.getSelectedIndex();
-		ImagePlus imageToOverlay = WindowManager.getImage(overlayImageIndex + 1);
+		// Compute Cell File for current settings
+		CellFile cellFile = analyzeCellFile(labelImage, roi, tissueTypeName, isLeftSide, smoothPolyline);
 		
-		ResultsTable table = computeCellFileAngles(imagePlus, tissueTypeName, smoothPolyline, isLeftSide, imageToOverlay);
-		table.show("Cell File Angles");
+		
+		// Display results in Table if appropriate
+		if (this.showTableCheckBox.isSelected())
+		{
+			// Concatenates some values into ResultsTable
+			ResultsTable table = cellFile.createTable();
+			table.show("Cell File Angles");
+		}
+
+		// Display results in log window if appropriate
+		if (this.showLogCheckBox.isSelected())
+		{
+			 printToLog(cellFile, labelImagePlus.getShortTitle());
+		}
+		
+		// Overlay results on image if appropriate
+		if (showOverlayCheckBox.isSelected())
+		{
+			// find image for displaying geometric overlays
+			int overlayImageIndex = this.imageToOverlayCombo.getSelectedIndex();
+			ImagePlus imageToOverlay = WindowManager.getImage(overlayImageIndex + 1);
+
+			// Create overlay
+			addCellFileToOverlay(imageToOverlay, cellFile);
+		}
+		
+	}
+	
+	public static final CellFile analyzeCellFile(ImageProcessor labelImage, Roi roi, String tissueTypeName, boolean isLeftSide, boolean smoothPolyline)
+	{
+		// create a new CellFile object
+		CellFile cellFile = new CellFile(tissueTypeName, isLeftSide);
+		
+		// Compute label succession from polyline ROI
+		Polygon polyline = ((PolygonRoi) roi).getPolygon();
+		cellFile.setWayPoints(polyline);
+		cellFile.computeLabelList(labelImage);
+
+		// compute the polyline between cell centroids, optionally smoothed
+		cellFile.computePathCurve(labelImage);
+		if (smoothPolyline)
+		{
+			cellFile.pathCurve = cellFile.pathCurve.smooth();
+		}
+		
+		// perform computation of boundaries, and of angles
+		cellFile.computeCellsBoundaries(labelImage);
+		
+		return cellFile;
 	}
 
 	/*
@@ -219,91 +283,54 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 	@Override
 	public void run(String args)
 	{
-		IJ.log("run plugin");
-		
+		// prepare combo box for modification
 		boolean state = this.imageToOverlayCombo.isEnabled();
 		this.imageToOverlayCombo.setEnabled(false);
 		this.imageToOverlayCombo.removeAllItems();
 
-		// create the list of image names
-		int[] indices = WindowManager.getIDList();
-		String[] imageNames = new String[indices.length];
-		for (int i=0; i<indices.length; i++)
+		// update the list of images in combo
+		for (int index : WindowManager.getIDList())
 		{
-			imageNames[i] = WindowManager.getImage(indices[i]).getTitle();
-			this.imageToOverlayCombo.addItem(imageNames[i]);
+			String imageName = WindowManager.getImage(index).getTitle();
+			this.imageToOverlayCombo.addItem(imageName);
 		}
 		
 		this.imageToOverlayCombo.setEnabled(state);
 	}
 
-	public ResultsTable computeCellFileAngles(ImagePlus labelImagePlus, String tissueTypeName, 
-			boolean smoothPath, boolean isLeftSide, ImagePlus imageToOverlay)
+	private void printToLog(CellFile cellFile, String imageName)
 	{
-		ImageProcessor labelImage = labelImagePlus.getProcessor();
-		Roi roi = labelImagePlus.getRoi();
-		Polygon polyline = ((PolygonRoi) roi).getPolygon();
-
-		
-		// create a new CellFile object
-		CellFile cellFile = new CellFile(tissueTypeName, isLeftSide);
-		
-		// Compute label succession from polyline ROI
-		cellFile.setWayPoints(polyline);
-		cellFile.computeLabelList(labelImage);
-
-		// compute the polyline between cell centroids, optionally smoothed
-		cellFile.computePathCurve(labelImage);
-		if (smoothPath)
-		{
-			cellFile.pathCurve = cellFile.pathCurve.smooth();
-		}
-		
-		cellFile.computeCellsBoundaries(labelImage);
-		
-		// Concatenates some values into ResultsTable
-		ResultsTable table = cellFile.createTable();
-		
 		// Write current results into the "log" window
-		String imageName = labelImagePlus.getShortTitle();
+		IJ.log("imageName;tissueType;label1;label2;innerPointX;innerPointY;outerPointX;outerPointY;angleInDegrees");
 		for (CellsBoundary bnd : cellFile.getBoundaries())
 		{
-			String str = imageName + "; " + tissueTypeName + "; " 
+			String str = imageName + "; " + cellFile.tissueTypeName + "; " 
 					+ bnd.label1 + "; " + bnd.label2 + "; "
 					+ bnd.innerPoint.getX() + "; " + bnd.innerPoint.getY() + "; " 
 					+ bnd.outerPoint.getX() + "; " + bnd.outerPoint.getY() + "; "
 					+ Math.toDegrees(bnd.angle);
 			IJ.log(str);
 		}
-		
-		
-		// Create overlay
-		Overlay overlay = imageToOverlay.getOverlay();
+
+	}
+
+	// ====================================================
+	// Graphical functions 
+	
+	public void addCellFileToOverlay(ImagePlus image, CellFile cellFile)
+	{
+		Overlay overlay = image.getOverlay();
 		if (overlay == null)
 		{
 			overlay = new Overlay();
 		}
+
 		updateOverlay(overlay, cellFile);
-		imageToOverlay.setOverlay(overlay);
 		
-		return table;
+		image.setOverlay(overlay);
 	}
 	
-	
-	// ====================================================
-	// Widget call backs
-	
-	private void updateImageToOverlayComboState()
-	{
-		boolean state = this.showOverlayCheckBox.isSelected(); 
-		this.imageToOverlayCombo.setEnabled(state);
-		this.imageToOverlayLabel.setEnabled(state);
-	}
-	
-	// ====================================================
-	// Graphical functions 
-	
-	public void updateOverlay(Overlay overlay, CellFile cellFile)
+	private void updateOverlay(Overlay overlay, CellFile cellFile)
 	{
 		for (CellsBoundary bnd : cellFile.getBoundaries())
 		{
@@ -365,4 +392,15 @@ public class Cell_File_Angles extends PlugInFrame implements ActionListener
 		overlay.add(lineRoi);
 	}
 
+	
+	// ====================================================
+	// Widget call backs
+	
+	private void updateImageToOverlayComboState()
+	{
+		boolean state = this.showOverlayCheckBox.isSelected(); 
+		this.imageToOverlayCombo.setEnabled(state);
+		this.imageToOverlayLabel.setEnabled(state);
+	}
+	
 }
