@@ -25,6 +25,7 @@ import javax.swing.JTextField;
 
 import ij.IJ;
 import ij.ImagePlus;
+import ij.Prefs;
 import ij.WindowManager;
 import ij.gui.GUI;
 import ij.gui.Line;
@@ -59,7 +60,7 @@ public class Cell_File_Angles extends PlugInFrame
 	// processing options
 	JComboBox<String> tissueTypeCombo;
 	JTextField tissueTypeTextField;
-	JCheckBox leftSideCheckBox;
+	JComboBox<String> rootSideCombo;
 	JCheckBox smoothPolylineCheckBox;
 
 	// result display management
@@ -82,7 +83,6 @@ public class Cell_File_Angles extends PlugInFrame
 		
 		GUI.center(this);
 		setVisible(true);
-
 	}
 	
 	private void setupWidgets()
@@ -94,7 +94,9 @@ public class Cell_File_Angles extends PlugInFrame
 		}
 		this.tissueTypeTextField = new JTextField(15);
 
-		this.leftSideCheckBox = new JCheckBox("Left Side of Root", true);
+		this.rootSideCombo = new JComboBox<String>();
+		this.rootSideCombo.addItem("Left Side of Root");
+		this.rootSideCombo.addItem("Right Side of Root");
 
 		this.smoothPolylineCheckBox = new JCheckBox("Smooth Polyline", true);
 		
@@ -134,7 +136,7 @@ public class Cell_File_Angles extends PlugInFrame
 		JPanel metaDataPanel = createOptionsPanel("Meta-Data");
 		addInLine(metaDataPanel, new JLabel("Tissue Type: "), this.tissueTypeCombo);
 		addInLine(metaDataPanel, new JLabel("Other Tissue Type: "), this.tissueTypeTextField);
-		addInLine(metaDataPanel, this.leftSideCheckBox);
+		addInLine(metaDataPanel, this.rootSideCombo);
 		
 		JPanel processingPanel = createOptionsPanel("Processing Options");
 		addInLine(processingPanel, this.smoothPolylineCheckBox);
@@ -215,7 +217,7 @@ public class Cell_File_Angles extends PlugInFrame
 		{
 			tissueTypeName = (String) this.tissueTypeCombo.getSelectedItem();
 		}
-		boolean isLeftSide = this.leftSideCheckBox.isSelected();
+		boolean isLeftSide = this.rootSideCombo.getSelectedIndex() == 0;
 		
 		// Extract Computation options
 		boolean smoothPolyline = this.smoothPolylineCheckBox.isSelected();
@@ -403,4 +405,13 @@ public class Cell_File_Angles extends PlugInFrame
 		this.imageToOverlayLabel.setEnabled(state);
 	}
 	
+	// ====================================================
+	// Widget call backs
+	
+	/** Overrides close() in PlugInFrame. */
+	public void close()
+	{
+		super.close();
+	}
+
 }
