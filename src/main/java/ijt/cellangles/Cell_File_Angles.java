@@ -25,7 +25,6 @@ import javax.swing.JTextField;
 
 import ij.IJ;
 import ij.ImagePlus;
-import ij.Prefs;
 import ij.WindowManager;
 import ij.gui.GUI;
 import ij.gui.Line;
